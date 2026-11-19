@@ -1,0 +1,137 @@
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  phone VARCHAR(30) NOT NULL DEFAULT '',
+  student_id VARCHAR(50) NOT NULL DEFAULT '',
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  is_active BOOLEAN NOT NULL DEFAULT 1,
+  reset_otp_hash VARCHAR(255),
+  reset_otp_expires_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS snooker_tables (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_number INTEGER NOT NULL UNIQUE CHECK (table_number >= 1),
+  name VARCHAR(80) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'maintenance')),
+  maintenance_note VARCHAR(300) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS equipment (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name VARCHAR(100) NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 0),
+  status VARCHAR(20) NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'maintenance')),
+  note VARCHAR(300) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  table_id INTEGER NOT NULL REFERENCES snooker_tables(id) ON DELETE RESTRICT,
+  start_at DATETIME NOT NULL,
+  date_key VARCHAR(10) NOT NULL,
+  time_key VARCHAR(5) NOT NULL,
+  duration_hours INTEGER NOT NULL CHECK (duration_hours BETWEEN 1 AND 4),
+  slot_keys TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+  payment_method VARCHAR(20) NOT NULL DEFAULT 'pay-at-desk',
+  payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid', 'paid')),
+  admin_note VARCHAR(300) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_start_at ON bookings(start_at);
+CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+
+CREATE TABLE IF NOT EXISTS booking_equipment (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  equipment_id INTEGER NOT NULL REFERENCES equipment(id) ON DELETE RESTRICT,
+  name VARCHAR(100) NOT NULL,
+  quantity INTEGER NOT NULL CHECK (quantity >= 1),
+  UNIQUE (booking_id, equipment_id)
+);
+
+CREATE TABLE IF NOT EXISTS tournaments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name VARCHAR(120) NOT NULL,
+  description VARCHAR(1000) NOT NULL DEFAULT '',
+  start_date DATETIME NOT NULL,
+  player_limit INTEGER NOT NULL DEFAULT 16 CHECK (player_limit BETWEEN 2 AND 128),
+  registration_open BOOLEAN NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tournament_participants (
+  tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (tournament_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS matches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  player_one_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  player_two_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  scheduled_at DATETIME,
+  table_id INTEGER REFERENCES snooker_tables(id) ON DELETE SET NULL,
+  date_key VARCHAR(10),
+  time_key VARCHAR(5),
+  score_one INTEGER CHECK (score_one >= 0),
+  score_two INTEGER CHECK (score_two >= 0),
+  winner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed')),
+  verified_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_matches_tournament_id ON matches(tournament_id);
+
+CREATE TABLE IF NOT EXISTS booking_slots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_id INTEGER NOT NULL REFERENCES snooker_tables(id) ON DELETE CASCADE,
+  slot_key VARCHAR(20) NOT NULL,
+  booking_id INTEGER REFERENCES bookings(id) ON DELETE CASCADE,
+  match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (table_id, slot_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_booking_slots_booking_id ON booking_slots(booking_id);
+
+CREATE TABLE IF NOT EXISTS feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  booking_id INTEGER NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+  table_id INTEGER NOT NULL REFERENCES snooker_tables(id) ON DELETE CASCADE,
+  rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment VARCHAR(1000) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message VARCHAR(300) NOT NULL,
+  read_at DATETIME,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);

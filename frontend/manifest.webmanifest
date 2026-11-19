@@ -1,0 +1,16 @@
+{
+  "name": "Greenroom Snooker Booking",
+  "short_name": "Greenroom",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f3ec",
+  "theme_color": "#082c23",
+  "icons": [
+    {
+      "src": "/assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
