@@ -19,6 +19,7 @@ const userNavigation = [
   ['book', '＋', 'Book a table'],
   ['bookings', '▤', 'My bookings'],
   ['tournaments', '♧', 'Tournaments'],
+  ['feedback', '☆', 'Feedback'],
   ['notifications', '◉', 'Notifications'],
   ['profile', '◎', 'My profile']
 ];
@@ -191,7 +192,7 @@ function bookingRows(bookings, admin = false) {
     if (admin && booking.status === 'approved' && booking.paymentStatus === 'unpaid') {
       actions.push(`<button class="btn btn-secondary btn-quiet" data-action="mark-paid" data-id="${booking._id}">Mark paid</button>`);
     }
-    const endTime = new Date(booking.startAt).getTime() + booking.durationHours * 3600000;
+    
     if (!admin && booking.status === 'approved' && endTime < Date.now()
       && !state.data.reviewedBookingIds?.includes(booking._id)) {
       actions.push(`<button class="btn btn-quiet" data-action="review-booking" data-id="${booking._id}">Leave feedback</button>`);
@@ -502,14 +503,49 @@ async function renderNotifications() {
     ${result.notifications.length ? `<div class="notification-list">${result.notifications.map((notice) => `<article class="notification-item ${notice.readAt ? '' : 'unread'}"><strong>${dateTime(notice.createdAt)}</strong><div>${escapeHtml(notice.message)}</div></article>`).join('')}</div>` : emptyState('No updates just yet.')}
   `;
 }
-
 async function renderFeedback() {
-  const result = await api('/api/admin/feedback');
+  if (state.user.role === 'admin') {
+    const result = await api('/api/admin/feedback');
+    return `
+      ${pageHeading('Player feedback', 'Ratings & feedback', 'Use player reviews to identify equipment that needs attention.')}
+      ${result.feedback.length ? `<div class="booking-list">${result.feedback.map((item) => `
+        <article class="panel"><div class="booking-head"><strong>${escapeHtml(item.user?.name || 'Player')} · ${escapeHtml(item.table?.name || 'Table')}</strong><span>${'★'.repeat(item.rating)}${'☆'.repeat(5 - item.rating)}</span></div><p class="muted">${escapeHtml(item.comment || 'No comment provided.')}</p><span class="field-help">${dateTime(item.createdAt)}</span></article>
+      `).join('')}</div>` : emptyState('No player feedback has been submitted yet.')}
+    `;
+  }
+  const result = await api('/api/bookings?status=approved');
+  const reviewed = new Set(result.reviewedBookingIds || []);
+  const eligible = result.bookings.filter((booking) => !reviewed.has(booking._id));
+  const options = eligible.map((booking) => `
+    <option value="${booking._id}">${escapeHtml(booking.table?.name || 'Table')} · ${escapeHtml(dateTime(booking.startAt))}</option>
+  `).join('');
   return `
-    ${pageHeading('Player feedback', 'Ratings & feedback', 'Use player reviews to identify equipment that needs attention.')}
-    ${result.feedback.length ? `<div class="booking-list">${result.feedback.map((item) => `
-      <article class="panel"><div class="booking-head"><strong>${escapeHtml(item.user?.name || 'Player')} · ${escapeHtml(item.table?.name || 'Table')}</strong><span>${'★'.repeat(item.rating)}${'☆'.repeat(5 - item.rating)}</span></div><p class="muted">${escapeHtml(item.comment || 'No comment provided.')}</p><span class="field-help">${dateTime(item.createdAt)}</span></article>
-    `).join('')}</div>` : emptyState('No player feedback has been submitted yet.')}
+    ${pageHeading('Share your experience', 'Player feedback', 'Rate your table and equipment after an approved booking.')}
+    <section class="panel profile-panel">
+      ${eligible.length ? `
+        <form data-form="feedback">
+          <div class="field">
+            <label for="bookingId">Approved booking</label>
+            <select id="bookingId" name="bookingId" required>${options}</select>
+          </div>
+          <div class="field">
+            <label for="rating">Rating</label>
+            <select id="rating" name="rating" required>
+              <option value="5">★★★★★ (5 - Excellent)</option>
+              <option value="4">★★★★☆ (4 - Good)</option>
+              <option value="3">★★★☆☆ (3 - Average)</option>
+              <option value="2">★★☆☆☆ (2 - Needs attention)</option>
+              <option value="1">★☆☆☆☆ (1 - Poor)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="comment">Feedback</label>
+            <textarea id="comment" name="comment" maxlength="1000" placeholder="Share any notes about the table cloth, cues, or your session..." required></textarea>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">Submit feedback</button></div>
+        </form>
+      ` : emptyState('No approved bookings waiting for feedback. Book a table and have an admin approve it first.')}
+    </section>
   `;
 }
 
@@ -783,6 +819,16 @@ app.addEventListener('submit', async (event) => {
         }
         state.page = 'bookings';
       }
+      } else if (action === 'feedback') {
+      await api('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          bookingId: values.bookingId,
+          rating: Number(values.rating),
+          comment: values.comment
+        })
+      });
+      showToast('Thanks for sharing your feedback.');
     } else if (action === 'profile') {
       const result = await api('/api/me', { method: 'PATCH', body: JSON.stringify(values) });
       state.user = result.user;

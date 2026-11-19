@@ -523,9 +523,8 @@ app.post('/api/feedback', authenticate, asyncRoute(async (req, res) => {
   const booking = await Booking.findOne({
     where: { id: bookingId, userId: req.user.id, status: 'approved' }
   });
-  const endTime = booking ? new Date(booking.startAt).getTime() + booking.durationHours * 3600000 : Infinity;
-  if (!booking || endTime > Date.now()) {
-    throw httpError(400, 'Feedback can be submitted after an approved booking has finished.');
+  if (!booking) {
+    throw httpError(400, 'Feedback can be submitted for an approved booking.');
   }
   const score = Number(req.body.rating);
   const comment = req.body.comment ?? '';

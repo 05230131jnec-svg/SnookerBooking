@@ -1,4 +1,4 @@
-const CACHE_NAME = 'greenroom-shell-v4';
+const CACHE_NAME = 'greenroom-shell-v5';
 const SHELL_FILES = [
   '/',
   '/css/styles.css',
